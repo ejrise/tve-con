@@ -1,4 +1,4 @@
-# [tve-con]
+# tve-con
 
 ## Overview
 
