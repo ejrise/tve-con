@@ -35,9 +35,9 @@ Run the scripts in this order.
 4. `run_dtd_parallel.m` (calls `runmydtd.m`) — motion correction, DTD fits
 5. `get_linear_fa.sh` — DTI fit (FA, MD)
 6. `registration_pipe.sh` — normalization to template space, WM masks
-7. Organize `final_regions/` by hand (see `scripts/analysis/`)
-8. `dtd_stats.ipynb` — ROI extraction and statistics
-9. `plot_maps.ipynb`, `plot_glass_brains.ipynb` — figures
+7. Organize `final_regions/` by hand (see `scripts/analysis/` below)
+8. `stats.ipynb` — ROI extraction and statistics
+9. `plot_maps.ipynb`, `plot_roi_brains.ipynb` — figures
 
 All outputs go into one results folder:
 ```
@@ -46,8 +46,8 @@ All outputs go into one results folder:
 ├── 02_snr_analysis/    denoise_pipe.sh
 ├── 03_dti/             get_linear_fa.sh
 ├── 04_registration/    registration_pipe.sh
-├── 05_models/          dtd_stats.ipynb (model summary CSVs)
-└── 06_figures/         analysis notebooks
+├── 05_models/          stats.ipynb (model summary CSVs)
+└── 06_figures/         stats.ipynb, plotting notebooks
 ```
 
 ---
@@ -56,28 +56,29 @@ All outputs go into one results folder:
 
 ### Important: bvec orientation
 
-The `.bvec` files in the [raw dataset]([https://openneuro.org/datasets/ds006445]) are the original, unmodified files from the scanner. When used as-is, we found that their tensor fits give principal diffusion directions that don’t agree with the expected anatomy. Swap the first two rows of every `.bvec` file and negate both, leaving the third row unchanged:
+The `.bvec` files in the [raw dataset](https://openneuro.org/datasets/ds006445) are the original, unmodified files from the scanner. When used as-is, we found that their tensor fits give principal diffusion directions that don’t agree with the expected anatomy. Swap the first two rows of every `.bvec` file and negate both, leaving the third row unchanged:
 
 - New row 1 (x) = −(original row 2)
 - New row 2 (y) = −(original row 1)
 - New row 3 (z) = original row 3
 
-`flip_bvec.sh` applies this correction to every `.bvec` in the BIDS folder and keeps a `.backup` of each original. It skips files that already have a backup, so running it twice does not undo the correction.
+`scripts/preprocess/dwi/flip_bvec.sh` applies this correction to every `.bvec` in the BIDS folder and keeps a `.backup` of each original. It skips files that already have a backup, so running it twice does not undo the correction.
 
 ```
-scripts/preprocessing/anat/
+scripts/preprocess/anat/
     t1_brainextract_template.sh
 ```
 Requires ANTs and FSL.
-- Skull-strips each participant's BIDS T1w image (`antsBrainExtraction.sh`) using the OASIS template, brain probability mask and registration mask from `resources/Ants_templates/`. Output: `sub-XX_t1_BrainExtractionBrain.nii.gz`.
+- Skull-strips each participant's BIDS T1w image (`antsBrainExtraction.sh`) using the OASIS template, brain probability mask and registration mask from `resources/ants_templates/`. Output: `sub-XX_t1_BrainExtractionBrain.nii.gz`.
 - Builds a population template from all control participants listed in `participants.tsv` (`antsMultivariateTemplateConstruction.sh`). Set `GROUP_COLUMN` and `CONTROL_LABEL` to match `participants.tsv` (in this dataset: `group_id` / `0`). Writes `template_inputs.txt` listing the participants used.
-- Resamples the template to 2mm isotropic (`flirt`). Output: `control_t1s/control_temp_2mm.nii.gz`.
+- Resamples the template to 2mm isotropic (`flirt`). Output: `control_t1s/control_temp_2mm.nii.gz` (the template used in the paper is provided in `resources/cont_template/`).
 
 ```
-scripts/preprocessing/dwi/
+scripts/preprocess/dwi/
+    flip_bvec.sh
     denoise_pipe.sh
-    run_dtd_parallel.m
-    runmydtd.m
+    get_tve/run_dtd_parallel.m
+    get_tve/runmydtd.m
     get_linear_fa.sh
 ```
 Requires MRtrix3, FSL, MATLAB (Parallel Computing Toolbox), elastix and the md-dmri toolbox.
@@ -87,7 +88,7 @@ Requires MRtrix3, FSL, MATLAB (Parallel Computing Toolbox), elastix and the md-d
 - `get_linear_fa.sh`: Fits a diffusion tensor to the linear-encoding volumes of the motion-corrected data (`dwi2tensor`) and extracts FA and MD (`tensor2metric`). Output: `03_dti/sub-XX/sub-XX_FA.nii.gz`, `sub-XX_MD.nii.gz`.
 
 ```
-scripts/preprocessing/registration/
+scripts/preprocess/registration/
     registration_pipe.sh
 ```
 Requires ANTs and FSL. We recommend visually checking all outputs. For each participant:
@@ -102,8 +103,9 @@ Before the subject loop, it registers MNI152 → control template once and warps
 
 ```
 scripts/analysis/
+    stats.ipynb
 ```
-Before running the analysis notebooks, organize the template-space tract masks yourself. `registration_pipe.sh` does not create this folder. Copy the masks from `04_registration/ROIs_CONspace/` into:
+Before running `stats.ipynb` or the plotting notebooks, organize the template-space tract masks yourself. `registration_pipe.sh` does not create this folder. Copy the masks from `04_registration/ROIs_CONspace/` into:
 ```
 04_registration/ROIs_CONspace/final_regions/
     Association/    (+ All_assoc.nii.gz, combined mask)
@@ -112,7 +114,7 @@ Before running the analysis notebooks, organize the template-space tract masks y
 ```
 You may use the tract groupings in Fig. 1 of Rizor et al. (or your own).
 
-- `stats/dtd_stats.ipynb`: Extracts the median value of each parameter (DTD: `ufa`, `msqanison`, `op`, `miso`, `vison`; DTI: `FA`, `MD`) within each tract ROI, restricted to each participant's WM mask. Log-transforms V(Diso) (right-skewed) and z-scores within parameter × ROI. Then fits:
+- `stats.ipynb`: Extracts the median value of each parameter (DTD: `ufa`, `msqanison`, `op`, `miso`, `vison`; DTI: `FA`, `MD`) within each tract ROI, restricted to each participant's WM mask. Log-transforms V(Diso) (right-skewed) and z-scores within parameter × ROI. Then fits:
   - hierarchical Bayesian logistic regressions of group on each parameter (ROI effects pooled within tract type, with age and sex covariates)
   - a hierarchical regression of OP on µFA and FA
   - isotropic model comparisons (`vison` + `MD`, `vison` + `miso`)
@@ -120,16 +122,21 @@ You may use the tract groupings in Fig. 1 of Rizor et al. (or your own).
 
   Outputs summary CSVs to `05_models/` (including `auc_roi.csv`) and figures to `06_figures/`
   - Optional: `drop_ids` excludes controls with a previous concussion history (potential supplementary analysis) 
-- `figures/plot_maps.ipynb`: Raw vs. denoised DWI and parameter maps for one representative control and one concussion participant. Outputs to `06_figures/representative/`.
-- `figures/plot_glass_brains.ipynb`: Tract ROIs on the control template (2D slices and 3D renders) and 3D renders of regions coloured by AUC, with AUC values entered by hand from `05_models/auc_roi.csv`. Tracts are restricted to a template-space WM mask (`control_temp_WM_mask_2mm.nii.gz`). 
+```
+scripts/plotting/
+    plot_maps.ipynb
+    plot_roi_brains.ipynb
+```
+- `plot_maps.ipynb`: Raw vs. denoised DWI and parameter maps for one representative control and one concussion participant. Outputs to `06_figures/representative/`.
+- `plot_roi_brains.ipynb`: Tract ROIs on the control template (2D slices and 3D renders) and 3D renders of regions coloured by AUC, with AUC values entered by hand from `05_models/auc_roi.csv`. Tracts are restricted to a template-space WM mask (`resources/cont_template/control_temp_WM_mask_2mm.nii.gz`).
 
 ---
 
 ## Resources
 
 - `resources/rois/`: HCP1065 Population-Averaged Tractography Atlas (Yeh, 2022) tract masks in MNI152 2mm space, thresholded at ≥ 50%.
-- `resources/cont_template/`: Control population template built from the 32 control participants with `t1_brainextract_template.sh` (`antsMultivariateTemplateConstruction.sh`). `control_templatetemplate0.nii.gz` is the full-resolution template; `control_temp_2mm.nii.gz` is the 2mm version used for registration in `registration_pipe.sh`; `control_temp_WM_mask_2mm.nii.gz` is the template-space WM mask used in `plot_glass_brains.ipynb`. Provided so results can be reproduced without rebuilding the template; point `CONTROLS_TEMPLATE` (`registration_pipe.sh`) and `TEMPLATE_DIR` (`plot_glass_brains.ipynb`) to this folder.
-- `resources/Ants_templates/`: `T_template0.nii.gz`, `T_template0_BrainCerebellumProbabilityMask.nii.gz` and `T_template0_BrainCerebellumRegistrationMask.nii.gz` from the [ANTs/ANTsR Brain Templates](https://doi.org/10.6084/m9.figshare.915436) (OASIS, CC BY-NC). These are not covered by this repository's license.
+- `resources/cont_template/`: Control population template built from the 32 control participants with `t1_brainextract_template.sh` (`antsMultivariateTemplateConstruction.sh`). `control_templatetemplate0.nii.gz` is the full-resolution template; `control_temp_2mm.nii.gz` is the 2mm version used for registration in `registration_pipe.sh`; `control_temp_WM_mask_2mm.nii.gz` is the template-space WM mask used in `plot_roi_brains.ipynb`. Provided so results can be reproduced without rebuilding the template; point `CONTROLS_TEMPLATE` (`scripts/preprocess/registration/registration_pipe.sh`) and `TEMPLATE_DIR` (`scripts/plotting/plot_roi_brains.ipynb`) to this folder.
+- `resources/ants_templates/`: `T_template0.nii.gz`, `T_template0_BrainCerebellumProbabilityMask.nii.gz` and `T_template0_BrainCerebellumRegistrationMask.nii.gz` from the [ANTs/ANTsR Brain Templates](https://doi.org/10.6084/m9.figshare.915436) (OASIS, CC BY-NC). These are not covered by this repository's license.
 - MNI152 2mm brain template: `$FSLDIR/data/standard/MNI152_T1_2mm_brain.nii.gz` (included with FSL).
 ---
 
