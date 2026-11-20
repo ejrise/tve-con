@@ -11,16 +11,16 @@ Code for Rizor et al., Characterizing white matter microstructure in acute concu
 tve-con/
 ├── resources/
 │   ├── ants_templates/   (brain extraction priors — download, see below)
-│   ├── cont_template/   
-│   └── rois/     (HCP1065 tract masks, MNI152 2mm, thresholded ≥ 50%)
+│   ├── cont_template/
+│   └── rois/             (HCP1065 tract masks, MNI152 2mm, thresholded ≥ 50%)
 └── scripts/
     ├── analysis/
     ├── plotting/
-    ├── preprocess/
-    │   ├── anat/
-    │   ├── dwi/
-    │   │   └── get_tve/
-    │   └── registration/
+    └── preprocess/
+        ├── anat/
+        ├── dwi/
+        │   └── get_tve/
+        └── registration/
 ```
 
 ---
